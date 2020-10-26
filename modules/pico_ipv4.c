@@ -987,7 +987,9 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
     }
 
     if (dst->addr == 0) {
+#ifdef PICO_DEBUG_NOTFOUND
         dbg("IP destination addr error\n");
+#endif
         pico_err = PICO_ERR_EINVAL;
         goto drop;
     }
