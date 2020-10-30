@@ -852,8 +852,12 @@ pico_timer_ref_add(pico_time expire, struct pico_timer *t, uint32_t id, uint32_t
         return 0;
     }
     if (Timers->n > PICO_MAX_TIMERS) {
-        dbg("Warning: I have %d timers\n", (int)Timers->n);
-        pico_dump_timers();
+    	static int lastmax = 0;
+    	if (Timers->n > lastmax) {
+    		lastmax = Timers->n;
+    		dbg("Warning: I have %d timers\n", (int)Timers->n);
+    		pico_dump_timers();
+    	}
     }
 
     return tref.id;
