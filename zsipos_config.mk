@@ -1,4 +1,4 @@
-MCAST=0 # bug: timer leak
-MDNS=0  # because of MCAST bug
-
-
+#bug: timer leak
+MCAST=0
+#needs MCAST
+MDNS=0
