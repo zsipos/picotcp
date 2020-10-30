@@ -549,6 +549,7 @@ struct pico_timer
 {
     void *arg;
     void (*timer)(pico_time timestamp, void *arg);
+    void *caller;
 };
 
 
@@ -590,6 +591,23 @@ int32_t pico_seq_compare(uint32_t a, uint32_t b)
     }
 
     return 0;
+}
+
+static void pico_dump_timers(void)
+{
+    uint32_t i;
+    struct pico_timer_ref *tref;
+    struct pico_timer *t;
+
+    for (i = 1; i <= Timers->n; i++) {
+        tref = heap_get_element(Timers, i);
+        t = tref->tmr;
+        if (t) {
+        	dbg("%08x:%08x:%p, %d\n", tref->id, tref->hash, t->caller, tref->expire - pico_tick);
+        } else {
+        	dbg("%08x:%08x:%p, %d\n", tref->id, tref->hash, 0, tref->expire - pico_tick);
+        }
+    }
 }
 
 static void pico_check_timers(void)
@@ -835,13 +853,14 @@ pico_timer_ref_add(pico_time expire, struct pico_timer *t, uint32_t id, uint32_t
     }
     if (Timers->n > PICO_MAX_TIMERS) {
         dbg("Warning: I have %d timers\n", (int)Timers->n);
+        pico_dump_timers();
     }
 
     return tref.id;
 }
 
 static struct pico_timer *
-pico_timer_create(void (*timer)(pico_time, void *), void *arg)
+pico_timer_create(void (*timer)(pico_time, void *), void *arg, void *caller)
 {
     struct pico_timer *t = PICO_ZALLOC(sizeof(struct pico_timer));
 
@@ -852,13 +871,14 @@ pico_timer_create(void (*timer)(pico_time, void *), void *arg)
 
     t->arg = arg;
     t->timer = timer;
+    t->caller = caller;
 
     return t;
 }
 
 MOCKABLE uint32_t pico_timer_add(pico_time expire, void (*timer)(pico_time, void *), void *arg)
 {
-    struct pico_timer *t = pico_timer_create(timer, arg);
+    struct pico_timer *t = pico_timer_create(timer, arg, __builtin_return_address(0));
 
     /* zero is guard for timers */
     if (tmr_id == 0u) {
@@ -873,7 +893,7 @@ MOCKABLE uint32_t pico_timer_add(pico_time expire, void (*timer)(pico_time, void
 
 uint32_t pico_timer_add_hashed(pico_time expire, void (*timer)(pico_time, void *), void *arg, uint32_t hash)
 {
-    struct pico_timer *t = pico_timer_create(timer, arg);
+    struct pico_timer *t = pico_timer_create(timer, arg, __builtin_return_address(0));
 
     /* zero is guard for timers */
     if (tmr_id == 0u) {
