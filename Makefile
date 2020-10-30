@@ -1,6 +1,8 @@
 -include ../../config.mk
 -include ../../tools/kconfig/.config
 
+include zsipos_config.mk
+
 OS:=$(shell uname)
 CC:=$(CROSS_COMPILE)gcc
 LD:=$(CROSS_COMPILE)ld
