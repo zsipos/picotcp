@@ -603,9 +603,9 @@ static void pico_dump_timers(void)
         tref = heap_get_element(Timers, i);
         t = tref->tmr;
         if (t) {
-        	dbg("%08x:%08x:%p, %d\n", tref->id, tref->hash, t->caller, tref->expire - pico_tick);
+        	dbg("%08x:%08x:%p, %ld\n", tref->id, tref->hash, t->caller, tref->expire - pico_tick);
         } else {
-        	dbg("%08x:%08x:%p, %d\n", tref->id, tref->hash, 0, tref->expire - pico_tick);
+        	dbg("%08x:%08x:%p, %ld\n", tref->id, tref->hash, (void*)0, tref->expire - pico_tick);
         }
     }
 }
@@ -852,7 +852,7 @@ pico_timer_ref_add(pico_time expire, struct pico_timer *t, uint32_t id, uint32_t
         return 0;
     }
     if (Timers->n > PICO_MAX_TIMERS) {
-    	static int lastmax = 0;
+    	static uint32_t lastmax = 0;
     	if (Timers->n > lastmax) {
     		lastmax = Timers->n;
     		dbg("Warning: I have %d timers\n", (int)Timers->n);
