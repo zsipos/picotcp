@@ -55,7 +55,8 @@ static int pico_enqueue_and_wakeup_if_needed(struct pico_queue *q_in, struct pic
 #endif
 
 #ifdef PICO_SUPPORT_IPV4
-#ifdef PICO_SUPPORT_MCAST
+//ADI: this code is also used for udp broadcast, so keep it
+//#ifdef PICO_SUPPORT_MCAST
 static inline int pico_socket_udp_deliver_ipv4_mcast_initial_checks(struct pico_socket *s, struct pico_frame *f)
 {
     struct pico_ip4 p_dst;
@@ -98,7 +99,7 @@ static int pico_socket_udp_deliver_ipv4_mcast(struct pico_socket *s, struct pico
 
     return 0;
 }
-#endif
+//#endif
 static int pico_socket_udp_deliver_ipv4_unicast(struct pico_socket *s, struct pico_frame *f)
 {
     struct pico_frame *cpy;
@@ -122,9 +123,9 @@ static int pico_socket_udp_deliver_ipv4(struct pico_socket *s, struct pico_frame
     s_local.addr = s->local_addr.ip4.addr;
     p_dst.addr = ip4hdr->dst.addr;
     if ((pico_ipv4_is_broadcast(p_dst.addr)) || pico_ipv4_is_multicast(p_dst.addr)) {
-#ifdef PICO_SUPPORT_MCAST
+//#ifdef PICO_SUPPORT_MCAST
         ret = pico_socket_udp_deliver_ipv4_mcast(s, f);
-#endif
+//#endif
     } else if ((s_local.addr == PICO_IPV4_INADDR_ANY) || (s_local.addr == p_dst.addr)) {
         ret = pico_socket_udp_deliver_ipv4_unicast(s, f);
     }
