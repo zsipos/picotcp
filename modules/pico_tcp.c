@@ -17,6 +17,8 @@
 #include "pico_queue.h"
 #include "pico_tree.h"
 
+//#define DEBUG_TCP_GENERAL
+
 #define TCP_IS_STATE(s, st) ((s->state & PICO_SOCKET_STATE_TCP) == st)
 #define TCP_SOCK(s) ((struct pico_socket_tcp *)s)
 #define SEQN(f) ((f) ? (long_be(((struct pico_tcp_hdr *)((f)->transport_hdr))->seq)) : 0)
@@ -275,6 +277,7 @@ struct pico_socket_tcp {
     struct pico_tcp_queue tcpq_hold; /* buffer to hold delayed frames according to Nagle */
 
     /* tcp_output */
+    uint32_t snd_first;
     uint32_t snd_nxt;
     uint32_t snd_last;
     uint32_t snd_old_ack;
@@ -295,6 +298,7 @@ struct pico_socket_tcp {
     uint16_t recv_wnd_scale;
 
     /* tcp_input */
+    uint32_t rcv_first;
     uint32_t rcv_nxt;
     uint32_t rcv_ackd;
     uint32_t rcv_processed;
@@ -957,6 +961,10 @@ static inline int tcp_send_try_enqueue(struct pico_socket_tcp *ts, struct pico_f
 
         tcp_dbg("DBG> [tcp output] state: %02x --> local port:%u remote port: %u seq: %08x ack: %08x flags: %02x = t_len: %u, hdr: %u payload: %d\n",
                 TCPSTATE(&ts->sock) >> 8, short_be(hdr->trans.sport), short_be(hdr->trans.dport), SEQN(f), ACKN(f), hdr->flags, f->transport_len, (hdr->len & 0xf0) >> 2, f->payload_len );
+        tcp_dbg("out: seq=%d ", SEQN(f)-ts->snd_first);
+        if (hdr->flags & PICO_TCP_ACK)
+        	tcp_dbg("ack=%d ", ACKN(f)-ts->rcv_first);
+        tcp_dbg("payload=%d\n", f->payload_len);
     } else {
         pico_frame_discard(cpy);
     }
@@ -1221,8 +1229,11 @@ int pico_tcp_initconn(struct pico_socket *s)
 
     hdr = (struct pico_tcp_hdr *) syn->transport_hdr;
 
-    if (!ts->snd_nxt)
+    if (!ts->snd_nxt) {
+    	tcp_dbg("%s: set snd_nxt to random\n", __FUNCTION__);
         ts->snd_nxt = long_be(pico_paws());
+        ts->snd_first = ts->snd_nxt;
+    }
 
     ts->snd_last = ts->snd_nxt;
     ts->cwnd = PICO_TCP_IW;
@@ -2417,6 +2428,8 @@ static int tcp_syn(struct pico_socket *s, struct pico_frame *f)
     new->tcpq_hold.max_size = 2u * mtu;
     new->rcv_nxt = long_be(hdr->seq) + 1;
     new->snd_nxt = long_be(pico_paws());
+    tcp_dbg("%s: set snd_nxt to random\n", __FUNCTION__);
+    new->snd_first = new->snd_nxt;
     new->snd_last = new->snd_nxt;
     new->cwnd = PICO_TCP_IW;
     new->ssthresh = (uint16_t)((uint16_t)(PICO_DEFAULT_SOCKETQ / new->mss) -  (((uint16_t)(PICO_DEFAULT_SOCKETQ / new->mss)) >> 3u));
@@ -2481,6 +2494,7 @@ static int tcp_synack(struct pico_socket *s, struct pico_frame *f)
         t->retrans_tmr = 0;
 
         t->rcv_nxt = long_be(hdr->seq);
+        t->rcv_first = t->rcv_nxt;
         t->rcv_processed = t->rcv_nxt + 1;
         tcp_ack(s, f);
 
@@ -2817,6 +2831,7 @@ static int tcp_action_by_flags(const struct tcp_action_entry *action, struct pic
 int pico_tcp_input(struct pico_socket *s, struct pico_frame *f)
 {
     struct pico_tcp_hdr *hdr = (struct pico_tcp_hdr *) (f->transport_hdr);
+    struct pico_socket_tcp *ts = (void*)s;
     int ret = 0;
     uint8_t flags = hdr->flags;
     const struct tcp_action_entry *action = &tcp_fsm[s->state >> 8];
@@ -2828,6 +2843,11 @@ int pico_tcp_input(struct pico_socket *s, struct pico_frame *f)
     tcp_dbg("[sam] TCP> flags = 0x%02x\n", hdr->flags);
     tcp_dbg("[sam] TCP> s->state >> 8 = %u\n", s->state >> 8);
     tcp_dbg("[sam] TCP> [tcp input] socket: %p state: %d <-- local port:%u remote port: %u seq: 0x%08x ack: 0x%08x flags: 0x%02x t_len: %u, hdr: %u payload: %d\n", s, s->state >> 8, short_be(hdr->trans.dport), short_be(hdr->trans.sport), SEQN(f), ACKN(f), hdr->flags, f->transport_len, (hdr->len & 0xf0) >> 2, f->payload_len );
+    if (hdr->flags == PICO_TCP_SYNACK) {
+    	tcp_dbg("(synack)\n");
+    } else {
+    	tcp_dbg("seq: %d ack: %d\n", SEQN(f)-ts->rcv_first, ACKN(f)-ts->snd_first);
+    }
 
     /* This copy of the frame has the current socket as owner */
     f->sock = s;
